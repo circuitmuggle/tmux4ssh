@@ -77,3 +77,6 @@ dmypy.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Prototype backup files
+prototype/tmux_ssh_cp.py
