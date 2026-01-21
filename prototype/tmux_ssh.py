@@ -18,7 +18,7 @@ EXPIRY_DAYS = 30
 TMUX_SESSION = "remote_task"
 START_MARKER = "___CMD_START_MARKER___"
 END_MARKER = "___CMD_COMPLETE_MARKER___"
-LOG_DIR = "~/tmux_ssh_logs"  # Remote server log directory
+LOG_DIR = "$HOME/tmux_ssh_logs"  # Remote server log directory
 # ==========================================================
 
 
@@ -512,12 +512,10 @@ def execute_remote_cmd(
         # Determine session name
         if new_session:
             session_name = f"task_{uuid.uuid4().hex[:8]}"
-            print(f"[*] Creating new session: {session_name}")
         else:
             session_name = find_existing_session(client)
             if not session_name:
                 session_name = TMUX_SESSION
-            print(f"[*] Using existing session: {session_name}")
 
             # Check if command is already running in this session
             if not force and check_command_running(client, session_name):
@@ -587,7 +585,11 @@ def execute_remote_cmd(
 
         stdin, stdout, stderr = client.exec_command(dispatch_cmd)
         target_session = stdout.read().decode().strip()
-        print(f"[*] Running in tmux session: {target_session}")
+
+        if new_session:
+            print(f"[*] Created new session: {target_session}")
+        else:
+            print(f"[*] Using session: {target_session}")
 
         if timeout:
             print(f"[*] Timeout: {timeout}s, Idle timeout: {idle_timeout}s")

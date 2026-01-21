@@ -18,6 +18,8 @@ Execute remote commands via SSH in tmux sessions with real-time output streaming
 
 ## Installation
 
+### Option 1: Install as Package (Recommended)
+
 ```bash
 # Install in development mode
 pip install -e ".[dev]"
@@ -25,6 +27,22 @@ pip install -e ".[dev]"
 # Install pre-commit hooks
 pre-commit install
 ```
+
+**Requirements:** Python 3.10 or higher
+
+### Option 2: Use Prototype Without Installation
+
+If you want to test without installing the package, use the standalone prototype script:
+
+```bash
+# Navigate to prototype directory
+cd prototype
+
+# Run directly with Python
+python3 tmux_ssh.py -H myserver.com -U myuser "hostname"
+```
+
+See `prototype/README.md` for more details.
 
 ### Uninstall
 
