@@ -77,7 +77,3 @@ dmypy.json
 # OS
 .DS_Store
 Thumbs.db
-
-# Prototype files (not part of the package)
-tmux_ssh.py
-tmux_ssh_*.py
