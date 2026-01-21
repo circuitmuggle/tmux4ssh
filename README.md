@@ -230,4 +230,4 @@ tmux_ssh/
 
 ## License
 
-MIT
+Apache 2.0
