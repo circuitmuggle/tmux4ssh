@@ -12,6 +12,10 @@ from datetime import datetime, timedelta
 
 import keyring
 import paramiko
+from colorama import Fore, Style, init
+
+# Initialize colorama for cross-platform colored output
+init(autoreset=True)
 
 # Exit codes
 EXIT_COMPLETED = 0
@@ -448,7 +452,7 @@ class TmuxSSHClient:
             # Stream from the latest symlink
             log_symlink = self.get_log_symlink(session_name, self.config.log_dir)
             print(f"[*] Streaming from: {log_symlink}")
-            print("[*] Streaming output:\n")
+            print(f"{Fore.CYAN}[*] Streaming output:{Style.RESET_ALL}\n")
 
             tail_cmd = f'tail -n +1 -f "{log_symlink}"'
             stdin, stdout, stderr = client.exec_command(tail_cmd)
@@ -500,7 +504,7 @@ class TmuxSSHClient:
                 except Exception:
                     time.sleep(0.1)
 
-            print("\n[+] Command completed.")
+            print(f"\n{Fore.GREEN}[+] Command completed.{Style.RESET_ALL}")
             self._update_timestamp()
             client.close()
             return EXIT_COMPLETED
@@ -643,10 +647,10 @@ class TmuxSSHClient:
             else:
                 print(f"[*] Idle timeout: {idle_timeout}s")
 
-            print(f"[*] Dispatching: {command}")
+            print(f"{Fore.CYAN}[*] Dispatching:{Style.RESET_ALL} {command}")
             print(f"[*] Log file: {log_file}")
             time.sleep(0.5)
-            print("[*] Streaming output:\n")
+            print(f"{Fore.CYAN}[*] Streaming output:{Style.RESET_ALL}\n")
 
             # Stream output using tail -f on the symlink
             tail_cmd = f'tail -n +1 -f "{log_symlink}"'
@@ -718,7 +722,7 @@ class TmuxSSHClient:
                 except Exception:
                     time.sleep(0.1)
 
-            print("\n[+] Command completed.")
+            print(f"\n{Fore.GREEN}[+] Command completed.{Style.RESET_ALL}")
             self._update_timestamp()
             client.close()
             return EXIT_COMPLETED

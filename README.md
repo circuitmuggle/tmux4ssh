@@ -16,6 +16,35 @@ Execute remote commands via SSH in tmux sessions with real-time output streaming
 - **Timeout support** - Configurable idle (default: 1 hour) and total timeouts
 - **Server change detection** - Warns when load-balanced hostname resolves to different server
 
+## Why tmux-ssh?
+
+Standard SSH has limitations for long-running or critical remote tasks:
+
+| Scenario | Standard SSH | tmux-ssh |
+|----------|--------------|----------|
+| Internet drops mid-command | Command killed (SIGHUP) | Command keeps running in tmux |
+| Check progress after disconnect | Not possible | `tmux-ssh --attach` |
+| Run concurrent commands | Manual session management | `tmux-ssh --new` |
+| Stream output to local terminal | Works, but lost on disconnect | Persistent logs + reattach |
+
+**The manual workaround** without tmux-ssh:
+```bash
+ssh -t user@host           # Interactive login
+tmux new -s mysession      # Create tmux session
+./long_running_script.sh   # Run command
+# Ctrl+B, D to detach
+# ... later, after reconnecting ...
+ssh -t user@host
+tmux attach -t mysession   # Hope you remember the session name
+```
+
+**With tmux-ssh:**
+```bash
+tmux-ssh "./long_running_script.sh"   # Just run it
+# ... connection drops, reconnect later ...
+tmux-ssh --attach                      # Resume output streaming
+```
+
 ## Installation
 
 ### Option 1: Install as Package (Recommended)
@@ -132,6 +161,35 @@ tmux-ssh -H node01.cluster.example.com "command"
 ```bash
 # Clear stored credentials
 tmux-ssh --clear
+```
+
+**Tip: SSH Key Authentication**
+
+Setting up SSH keys eliminates password prompts for every command:
+
+```bash
+# Generate key (if you don't have one)
+ssh-keygen -t ed25519
+
+# Copy public key to remote server
+ssh-copy-id -i ~/.ssh/id_ed25519.pub user@hostname
+```
+
+After setup, SSH/SCP commands authenticate automatically without passwords.
+
+**Tip: File Transfer with SCP**
+
+Copy files between local and remote servers:
+
+```bash
+# Remote to local
+scp user@hostname:/remote/path/file.txt .
+
+# Local to remote
+scp file.txt user@hostname:/remote/path/
+
+# Copy directory recursively
+scp -r user@hostname:/remote/folder ./local/
 ```
 
 ## Log Files

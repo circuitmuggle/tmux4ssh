@@ -26,6 +26,7 @@ classifiers = [
 dependencies = [
     "paramiko>=3.0.0",
     "keyring>=24.0.0",
+    "colorama>=0.4.6",
 ]
 
 [project.optional-dependencies]

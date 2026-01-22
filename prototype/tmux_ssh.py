@@ -9,6 +9,10 @@ from datetime import datetime, timedelta
 
 import keyring
 import paramiko
+from colorama import Fore, Style, init
+
+# Initialize colorama for cross-platform colored output
+init(autoreset=True)
 
 # ================= Configuration Defaults =================
 APP_NAME = "TmuxSSHManager"
@@ -413,7 +417,7 @@ def attach_to_session(hostname, username, session_name=None, last_server=None):
         # Stream from the latest symlink
         log_symlink = get_log_symlink(session_name)
         print(f"[*] Streaming from: {log_symlink}")
-        print("[*] Streaming output:\n")
+        print(f"{Fore.CYAN}[*] Streaming output:{Style.RESET_ALL}\n")
 
         tail_cmd = f'tail -n +1 -f "{log_symlink}"'
         stdin, stdout, stderr = client.exec_command(tail_cmd)
@@ -463,7 +467,7 @@ def attach_to_session(hostname, username, session_name=None, last_server=None):
             except Exception:
                 time.sleep(0.1)
 
-        print("\n[+] Command completed.")
+        print(f"\n{Fore.GREEN}[+] Command completed.{Style.RESET_ALL}")
         update_timestamp()
         client.close()
         return EXIT_COMPLETED, current_server
@@ -596,13 +600,13 @@ def execute_remote_cmd(
         else:
             print(f"[*] Idle timeout: {idle_timeout}s")
 
-        print(f"[*] Dispatching: {command}")
+        print(f"{Fore.CYAN}[*] Dispatching:{Style.RESET_ALL} {command}")
         print(f"[*] Log file: {log_file}")
 
         # Wait for tmux to start executing the command
         time.sleep(0.5)
 
-        print("[*] Streaming output:\n")
+        print(f"{Fore.CYAN}[*] Streaming output:{Style.RESET_ALL}\n")
 
         # Stream output using tail -f on the symlink (read from beginning with -n +1)
         tail_cmd = f'tail -n +1 -f "{log_symlink}"'
@@ -676,7 +680,7 @@ def execute_remote_cmd(
             except Exception:
                 time.sleep(0.1)
 
-        print("\n[+] Command completed.")
+        print(f"\n{Fore.GREEN}[+] Command completed.{Style.RESET_ALL}")
         update_timestamp()
         client.close()
         return EXIT_COMPLETED, current_server
