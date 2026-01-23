@@ -100,14 +100,27 @@ tmux-ssh -t 3600 -i 1800 "very_long_command"
 
 ### Concurrent Execution
 
-```bash
-# Run in a new unique session (safe for concurrent execution)
-# Inherits current directory from remote_task session
-# Auto-terminates when command completes
-tmux-ssh --new "command1"
-tmux-ssh --new "command2"  # Runs in parallel
+By default, tmux-ssh automatically creates a new session when you run a command while another is already running:
 
-# Force execution (kills any running command)
+```bash
+# First command runs in default session
+tmux-ssh "command1"
+
+# Second command auto-creates new session for concurrent execution
+tmux-ssh "command2"
+# Output: [*] Session 'remote_task' is busy, creating 'task_a1b2c3d4' for concurrent execution...
+```
+
+You can also explicitly control this behavior:
+
+```bash
+# Explicitly create new session (always creates fresh session)
+tmux-ssh --new "command"
+
+# Disable auto-new, block if session is busy
+tmux-ssh --no-auto "command"
+
+# Force execution (kills any running command in session)
 tmux-ssh --force "command"
 ```
 
@@ -142,10 +155,10 @@ If your hostname resolves to multiple backend servers (DNS round-robin or load b
 
 ```
 [!] WARNING: Server changed!
-    Previous server: ees-lin32.ecs.apple.com
-    Current server:  ees-lin24.ecs.apple.com
-[!] Your tmux sessions from 'ees-lin32.ecs.apple.com' are NOT available on 'ees-lin24.ecs.apple.com'.
-[*] To access previous sessions, connect directly to: ees-lin32.ecs.apple.com
+    Previous server: node01.cluster.example.com
+    Current server:  node02.cluster.example.com
+[!] Your tmux sessions from 'node01.cluster.example.com' are NOT available on 'node02.cluster.example.com'.
+[*] To access previous sessions, connect directly to: node01.cluster.example.com
 ```
 
 **Recommendation**: For consistent tmux session access, use specific server hostnames instead of load-balanced hostnames:

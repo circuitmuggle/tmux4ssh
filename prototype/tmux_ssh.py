@@ -526,13 +526,14 @@ def execute_remote_cmd(
             # Check if command is already running in this session
             if not force and check_command_running(client, session_name):
                 if auto:
-                    # Auto-create new session
-                    print(
-                        f"[*] Command already running in '{session_name}', "
-                        "auto-creating new session..."
-                    )
+                    # Auto-create new session for concurrent execution
+                    old_session = session_name
                     new_session = True
                     session_name = f"task_{uuid.uuid4().hex[:8]}"
+                    print(
+                        f"[*] Session '{old_session}' is busy, "
+                        f"creating '{session_name}' for concurrent execution..."
+                    )
                 else:
                     print(f"\n[!] Command already running in session '{session_name}'.")
                     print("[*] Options:")
