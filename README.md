@@ -2,6 +2,8 @@
 
 Execute remote commands via SSH in tmux sessions with real-time output streaming and batch mode.
 
+The purpose of this project is to facilitate long-running simulations, such as Spectre, on a remote Linux server under unstable internet connections, when the user does not have root access to the server and relies on specialized CAD software such as Cadence Spectre.
+
 ## Features
 
 - **Real-time output streaming** - See command output as it happens
