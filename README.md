@@ -270,6 +270,58 @@ log: ~/tmux_ssh_logs/remote_task_20260120_100000.log
 | 2 | Timeout reached, command still running |
 | 3 | Blocked by running command |
 
+## FAQ
+
+### Will closing my laptop or losing internet kill my remote task?
+
+**No.** Your remote command continues running safely in the tmux session on the server.
+
+```
+┌─────────────────┐         ┌─────────────────────────────────────┐
+│  Your Laptop    │   SSH   │        Remote Server                │
+│                 │ ──────► │                                     │
+│  tmux-ssh       │         │   tmux session (remote_task)        │
+│  (streaming     │ ◄────── │     └── your command running        │
+│   output only)  │  tail   │     └── output → log file           │
+└─────────────────┘         └─────────────────────────────────────┘
+```
+
+When you close your laptop or lose connection:
+1. The SSH connection drops
+2. The local `tmux-ssh` process terminates
+3. **The remote command keeps running** inside the tmux session
+4. Output continues to be written to the log file
+
+When you reconnect later, use `tmux-ssh --attach` to resume streaming.
+
+### What happens if I press Ctrl+C locally?
+
+**Ctrl+C only stops the local streaming process.** The remote command continues running.
+
+This is safe and expected behavior — you can press Ctrl+C anytime to stop watching the output without affecting the remote task. To resume streaming later:
+
+```bash
+tmux-ssh --attach
+```
+
+### How do I actually terminate a running remote command?
+
+You have several options:
+
+```bash
+# Option 1: Use --force to kill and run a new command
+tmux-ssh --force "new_command"
+
+# Option 2: SSH directly and kill the process
+ssh user@host
+pkill -f "your_command_pattern"
+
+# Option 3: SSH directly and attach to tmux, then Ctrl+C
+ssh user@host
+tmux attach -t remote_task
+# Now Ctrl+C will kill the command inside tmux
+```
+
 ## Development
 
 ### Running Tests
