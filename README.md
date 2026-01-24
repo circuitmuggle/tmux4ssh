@@ -322,3 +322,7 @@ tmux_ssh/
 ## License
 
 Apache 2.0
+
+---
+
+*Spectre® is a registered trademark of Cadence Design Systems, Inc. All other trademarks are the property of their respective owners.*
