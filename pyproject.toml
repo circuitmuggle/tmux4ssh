@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tmux-ssh"
+name = "tmux4ssh"
 version = "0.1.0"
 description = "Execute remote commands via SSH in tmux sessions with real-time output streaming"
 readme = "README.md"
@@ -40,12 +40,11 @@ dev = [
 ]
 
 [project.scripts]
-tmux-ssh = "tmux_ssh.cli:main"
-ssh-tmux = "tmux_ssh.cli:main"
+tmux4ssh = "tmux_ssh.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/gaofengfan/tmux-ssh"
-Repository = "https://github.com/gaofengfan/tmux-ssh"
+Homepage = "https://github.com/circuitmuggle/tmux4ssh"
+Repository = "https://github.com/circuitmuggle/tmux4ssh"
 
 [tool.setuptools.packages.find]
 where = ["src"]

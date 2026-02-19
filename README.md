@@ -1,4 +1,4 @@
-# tmux-ssh
+# tmux4ssh
 
 Execute remote commands via SSH in tmux sessions with real-time output streaming and batch mode.
 
@@ -19,18 +19,18 @@ The purpose of this project is to facilitate long-running simulations, such as S
 - **Timeout support** - Configurable idle (default: 1 hour) and total timeouts
 - **Server change detection** - Warns when load-balanced hostname resolves to different server
 
-## Why tmux-ssh?
+## Why tmux4ssh?
 
 Standard SSH has limitations for long-running or critical remote tasks:
 
-| Scenario | Standard SSH | tmux-ssh |
+| Scenario | Standard SSH | tmux4ssh |
 |----------|--------------|----------|
 | Internet drops mid-command | Command killed (SIGHUP) | Command keeps running in tmux |
-| Check progress after disconnect | Not possible | `tmux-ssh --attach` |
-| Run concurrent commands | Manual session management | `tmux-ssh --new` |
+| Check progress after disconnect | Not possible | `tmux4ssh --attach` |
+| Run concurrent commands | Manual session management | `tmux4ssh --new` |
 | Stream output to local terminal | Works, but lost on disconnect | Persistent logs + reattach |
 
-**The manual workaround** without tmux-ssh:
+**The manual workaround** without tmux4ssh:
 ```bash
 ssh -t user@host           # Interactive login
 tmux new -s mysession      # Create tmux session
@@ -41,11 +41,11 @@ ssh -t user@host
 tmux attach -t mysession   # Hope you remember the session name
 ```
 
-**With tmux-ssh:**
+**With tmux4ssh:**
 ```bash
-tmux-ssh "./long_running_script.sh"   # Just run it
+tmux4ssh "./long_running_script.sh"   # Just run it
 # ... connection drops, reconnect later ...
-tmux-ssh --attach                      # Resume output streaming
+tmux4ssh --attach                      # Resume output streaming
 ```
 
 ## Installation
@@ -79,7 +79,7 @@ See `prototype/README.md` for more details.
 ### Uninstall
 
 ```bash
-pip uninstall tmux-ssh
+pip uninstall tmux4ssh
 ```
 
 ## Usage
@@ -88,26 +88,26 @@ pip uninstall tmux-ssh
 
 ```bash
 # SSH-compatible syntax (recommended)
-tmux-ssh user@host "command"
-tmux-ssh user@host:2222 "command"       # With custom port
-tmux-ssh host "command"                  # Uses saved username
+tmux4ssh user@host "command"
+tmux4ssh user@host:2222 "command"       # With custom port
+tmux4ssh host "command"                  # Uses saved username
 
 # Flag-based syntax (also supported)
-tmux-ssh -H myserver.com -U myuser "hostname"
-tmux-ssh -p 2222 -H myserver.com -U myuser "hostname"
+tmux4ssh -H myserver.com -U myuser "hostname"
+tmux4ssh -p 2222 -H myserver.com -U myuser "hostname"
 
 # Subsequent runs: host/user are remembered automatically
-tmux-ssh "ls -la"
-tmux-ssh "pwd"
+tmux4ssh "ls -la"
+tmux4ssh "pwd"
 
 # Override saved settings when needed
-tmux-ssh -H otherserver.com "hostname"
+tmux4ssh -H otherserver.com "hostname"
 
 # Set idle timeout (exit if no output for N seconds, default: 3600)
-tmux-ssh -i 7200 "long_running_command"
+tmux4ssh -i 7200 "long_running_command"
 
 # Set total timeout
-tmux-ssh -t 3600 -i 1800 "very_long_command"
+tmux4ssh -t 3600 -i 1800 "very_long_command"
 ```
 
 ### Command Quoting
@@ -121,39 +121,39 @@ tmux-ssh -t 3600 -i 1800 "very_long_command"
 
 ```bash
 # REQUIRED: Commands with shell operators
-tmux-ssh user@host "cmd1 && cmd2"              # Chain commands
-tmux-ssh user@host "cmd1 || cmd2"              # OR operator
-tmux-ssh user@host "cmd1; cmd2"                # Sequential
-tmux-ssh user@host "cat file | grep pattern"   # Pipe
-tmux-ssh user@host "echo hello > output.txt"   # Redirect
+tmux4ssh user@host "cmd1 && cmd2"              # Chain commands
+tmux4ssh user@host "cmd1 || cmd2"              # OR operator
+tmux4ssh user@host "cmd1; cmd2"                # Sequential
+tmux4ssh user@host "cat file | grep pattern"   # Pipe
+tmux4ssh user@host "echo hello > output.txt"   # Redirect
 
 # REQUIRED: Commands with special characters
-tmux-ssh user@host 'echo $HOME'                # Preserve $HOME for remote
-tmux-ssh user@host "ls *.txt"                  # Wildcards
-tmux-ssh user@host "cd '/path with spaces'"    # Paths with spaces
+tmux4ssh user@host 'echo $HOME'                # Preserve $HOME for remote
+tmux4ssh user@host "ls *.txt"                  # Wildcards
+tmux4ssh user@host "cd '/path with spaces'"    # Paths with spaces
 
 # OPTIONAL: Simple commands (quotes work but optional)
-tmux-ssh user@host hostname                    # Single word - OK
-tmux-ssh user@host "hostname"                  # Also OK
-tmux-ssh user@host ls -la /tmp                 # May fail (see note below)
-tmux-ssh user@host "ls -la /tmp"               # Safer with quotes
+tmux4ssh user@host hostname                    # Single word - OK
+tmux4ssh user@host "hostname"                  # Also OK
+tmux4ssh user@host ls -la /tmp                 # May fail (see note below)
+tmux4ssh user@host "ls -la /tmp"               # Safer with quotes
 ```
 
-**Note on flags starting with `-`**: Arguments like `-la` may be interpreted as tmux-ssh flags. Always quote commands with such arguments:
+**Note on flags starting with `-`**: Arguments like `-la` may be interpreted as tmux4ssh flags. Always quote commands with such arguments:
 
 ```bash
 # Problematic: -la might be parsed as a flag
-tmux-ssh user@host ls -la
+tmux4ssh user@host ls -la
 
 # Safe: Quote the entire command
-tmux-ssh user@host "ls -la"
+tmux4ssh user@host "ls -la"
 ```
 
 **Best practice**: Always quote your command string to avoid surprises.
 
 ### Saved Settings
 
-tmux-ssh automatically saves your connection settings to `~/.tmux_ssh_config`:
+tmux4ssh automatically saves your connection settings to `~/.tmux_ssh_config`:
 
 - **Host** (`-H`): Remote hostname
 - **User** (`-U`): SSH username
@@ -165,14 +165,14 @@ This means you only need to specify connection details once. All subsequent comm
 
 ### Concurrent Execution
 
-By default, tmux-ssh automatically creates a new session when you run a command while another is already running:
+By default, tmux4ssh automatically creates a new session when you run a command while another is already running:
 
 ```bash
 # First command runs in default session
-tmux-ssh "command1"
+tmux4ssh "command1"
 
 # Second command auto-creates new session for concurrent execution
-tmux-ssh "command2"
+tmux4ssh "command2"
 # Output: [*] Session 'remote_task' is busy, creating 'task_a1b2c3d4' for concurrent execution...
 ```
 
@@ -180,43 +180,43 @@ You can also explicitly control this behavior:
 
 ```bash
 # Explicitly create new session (always creates fresh session)
-tmux-ssh --new "command"
+tmux4ssh --new "command"
 
 # Disable auto-new, block if session is busy
-tmux-ssh --no-auto "command"
+tmux4ssh --no-auto "command"
 
 # Force execution (kills any running command in session)
-tmux-ssh --force "command"
+tmux4ssh --force "command"
 ```
 
 ### Session Management
 
 ```bash
 # List all running commands/sessions
-tmux-ssh --list
+tmux4ssh --list
 
 # Attach to a running session (auto-detect if only one)
-tmux-ssh --attach
+tmux4ssh --attach
 
 # Attach to a specific session
-tmux-ssh --attach task_a1b2c3d4
+tmux4ssh --attach task_a1b2c3d4
 
 # Clean up idle task_* sessions (keeps remote_task)
-tmux-ssh --cleanup
+tmux4ssh --cleanup
 ```
 
 When a command times out, you can resume streaming its output:
 ```bash
 # After timeout message:
 # [*] Idle timeout (3600s) reached. Command still running in tmux.
-# [*] Use 'tmux-ssh --attach' to resume streaming the output.
+# [*] Use 'tmux4ssh --attach' to resume streaming the output.
 
-tmux-ssh --attach
+tmux4ssh --attach
 ```
 
 ### Load-Balanced Hostnames
 
-If your hostname resolves to multiple backend servers (DNS round-robin or load balancer), tmux-ssh will warn you when you connect to a different server than before:
+If your hostname resolves to multiple backend servers (DNS round-robin or load balancer), tmux4ssh will warn you when you connect to a different server than before:
 
 ```
 [!] WARNING: Server changed!
@@ -229,17 +229,17 @@ If your hostname resolves to multiple backend servers (DNS round-robin or load b
 **Recommendation**: For consistent tmux session access, use specific server hostnames instead of load-balanced hostnames:
 ```bash
 # Instead of this (may connect to different servers):
-tmux-ssh -H cluster.example.com "command"
+tmux4ssh -H cluster.example.com "command"
 
 # Use this (always same server):
-tmux-ssh -H node01.cluster.example.com "command"
+tmux4ssh -H node01.cluster.example.com "command"
 ```
 
 ### Credential Management
 
 ```bash
 # Clear stored credentials
-tmux-ssh --clear
+tmux4ssh --clear
 ```
 
 **Tip: SSH Key Authentication**
@@ -331,7 +331,7 @@ log: ~/tmux_ssh_logs/remote_task_20260120_100000.log
 ┌─────────────────┐         ┌─────────────────────────────────────┐
 │  Your Laptop    │   SSH   │        Remote Server                │
 │                 │ ──────► │                                     │
-│  tmux-ssh       │         │   tmux session (remote_task)        │
+│  tmux4ssh       │         │   tmux session (remote_task)        │
 │  (streaming     │ ◄────── │     └── your command running        │
 │   output only)  │  tail   │     └── output → log file           │
 └─────────────────┘         └─────────────────────────────────────┘
@@ -339,11 +339,11 @@ log: ~/tmux_ssh_logs/remote_task_20260120_100000.log
 
 When you close your laptop or lose connection:
 1. The SSH connection drops
-2. The local `tmux-ssh` process terminates
+2. The local `tmux4ssh` process terminates
 3. **The remote command keeps running** inside the tmux session
 4. Output continues to be written to the log file
 
-When you reconnect later, use `tmux-ssh --attach` to resume streaming.
+When you reconnect later, use `tmux4ssh --attach` to resume streaming.
 
 ### What happens if I press Ctrl+C locally?
 
@@ -352,7 +352,7 @@ When you reconnect later, use `tmux-ssh --attach` to resume streaming.
 This is safe and expected behavior — you can press Ctrl+C anytime to stop watching the output without affecting the remote task. To resume streaming later:
 
 ```bash
-tmux-ssh --attach
+tmux4ssh --attach
 ```
 
 ### How do I actually terminate a running remote command?
@@ -361,17 +361,17 @@ Use the `--kill` option:
 
 ```bash
 # Kill command in auto-detected session
-tmux-ssh --kill
+tmux4ssh --kill
 
 # Kill command in a specific session
-tmux-ssh --kill task_a1b2c3d4
+tmux4ssh --kill task_a1b2c3d4
 ```
 
 Alternative options:
 
 ```bash
 # Use --force to kill and run a new command
-tmux-ssh --force "new_command"
+tmux4ssh --force "new_command"
 
 # SSH directly and kill the process
 ssh user@host
