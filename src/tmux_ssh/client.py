@@ -236,9 +236,31 @@ class TmuxSSHClient:
         client._transport = transport  # type: ignore[attr-defined]
         return client
 
+    @staticmethod
+    def _exec(
+        client: paramiko.SSHClient, cmd: str
+    ) -> tuple[paramiko.ChannelFile, paramiko.ChannelFile, paramiko.ChannelFile]:
+        """Execute a command on the remote server via /bin/sh.
+
+        Wraps all commands in sh -c to avoid tcsh compatibility issues,
+        since the remote login shell may be tcsh which mishandles bash-isms
+        like $(), #{}, and 2>/dev/null redirects.
+        """
+        # Commands already wrapped in sh -c don't need double-wrapping
+        if (
+            cmd.startswith("sh -c ")
+            or cmd.startswith("sh -c'")
+            or cmd.startswith('sh -c"')
+        ):
+            return client.exec_command(cmd)
+        # Simple commands without special chars can run directly
+        # But for consistency and safety, always wrap in sh -c
+        escaped = cmd.replace("'", "'\\''")
+        return client.exec_command(f"sh -c '{escaped}'")
+
     def _get_remote_hostname(self, client: paramiko.SSHClient) -> str:
         """Get the actual hostname of the remote server."""
-        _stdin, stdout, _stderr = client.exec_command("hostname")
+        _stdin, stdout, _stderr = self._exec(client, "hostname")
         return stdout.read().decode().strip()
 
     def _connect(self) -> paramiko.SSHClient:
@@ -325,7 +347,7 @@ class TmuxSSHClient:
             f'  if [ -n "$DEF_S" ]; then echo "$DEF_S"; fi; '
             f"fi'"
         )
-        _stdin, stdout, _stderr = client.exec_command(check_cmd)
+        _stdin, stdout, _stderr = self._exec(client, check_cmd)
         return stdout.read().decode().strip()
 
     def _check_command_running(
@@ -334,7 +356,7 @@ class TmuxSSHClient:
         """Check if a command is currently running by checking lock file."""
         lock_file = self.get_lock_file(session_name, self.config.log_dir)
         check_cmd = f"sh -c '[ -f \"{lock_file}\" ] && echo running || echo idle'"
-        _stdin, stdout, _stderr = client.exec_command(check_cmd)
+        _stdin, stdout, _stderr = self._exec(client, check_cmd)
         result = stdout.read().decode().strip()
         return result == "running"
 
@@ -351,7 +373,7 @@ class TmuxSSHClient:
         list_cmd = (
             f"sh -c 'find {log_dir} -maxdepth 1 -name \"*.lock\" -type f 2>/dev/null'"
         )
-        _stdin, stdout, _stderr = client.exec_command(list_cmd)
+        _stdin, stdout, _stderr = self._exec(client, list_cmd)
         output = stdout.read().decode().strip()
 
         if not output:
@@ -376,7 +398,7 @@ class TmuxSSHClient:
     ) -> str | None:
         """Get the current working directory of a tmux session."""
         cmd = f"tmux display-message -t \"{session_name}\" -p '#{{pane_current_path}}' 2>/dev/null"
-        _stdin, stdout, _stderr = client.exec_command(cmd)
+        _stdin, stdout, _stderr = self._exec(client, cmd)
         cwd = stdout.read().decode().strip()
         return cwd if cwd else None
 
@@ -400,7 +422,7 @@ class TmuxSSHClient:
 
             # Get list of all tmux sessions
             list_cmd = "tmux ls -F '#{session_name}' 2>/dev/null"
-            _stdin, stdout, _stderr = client.exec_command(list_cmd)
+            _stdin, stdout, _stderr = self._exec(client, list_cmd)
             output = stdout.read().decode().strip()
 
             if not output:
@@ -425,12 +447,12 @@ class TmuxSSHClient:
                     check_cmd = (
                         f"sh -c '[ -f \"{lock_file}\" ] && echo running || echo idle'"
                     )
-                    _stdin, stdout, _stderr = client.exec_command(check_cmd)
+                    _stdin, stdout, _stderr = self._exec(client, check_cmd)
                     status = stdout.read().decode().strip()
 
                     if status == "idle":
                         kill_cmd = f'tmux kill-session -t "{session}" 2>/dev/null'
-                        client.exec_command(kill_cmd)
+                        self._exec(client, kill_cmd)
                         killed.append(session)
                     else:
                         kept.append(f"{session} (running)")
@@ -461,6 +483,12 @@ class TmuxSSHClient:
         """
         List all sessions with active lock files (running commands).
 
+        Validates each lock file against active tmux sessions:
+        - Running: tmux session exists on this server
+        - On another server: lock file's server differs from current hostname
+        - Stale: lock file's server matches but tmux session doesn't exist
+          (auto-removed)
+
         Returns:
             Exit code (EXIT_COMPLETED, EXIT_ERROR)
         """
@@ -475,19 +503,111 @@ class TmuxSSHClient:
             self._check_server_change(client)
 
             log_dir = self.config.log_dir
-            # Use find + while loop to avoid tcsh glob/redirect issues
+
+            # Get current hostname
+            _stdin, stdout, _stderr = self._exec(client, "hostname")
+            current_server = stdout.read().decode().strip()
+
+            # Get active tmux sessions
+            _stdin, stdout, _stderr = self._exec(
+                client, "tmux ls -F '#{session_name}' 2>/dev/null"
+            )
+            active_sessions = set(stdout.read().decode().strip().splitlines())
+
+            # Get all lock files with their contents
             list_cmd = (
                 f'sh -c \'find {log_dir} -maxdepth 1 -name "*.lock" -type f 2>/dev/null | '
                 'while read f; do echo "=== $f ==="; cat "$f"; echo ""; done\''
             )
-            _stdin, stdout, _stderr = client.exec_command(list_cmd)
+            _stdin, stdout, _stderr = self._exec(client, list_cmd)
             output = stdout.read().decode().strip()
 
             if not output:
                 print(info("No running commands found."))
-            else:
+                self._update_timestamp()
+                client.close()
+                return EXIT_COMPLETED
+
+            # Parse lock files into blocks
+            blocks = []
+            current_block: dict[str, str] = {}
+            for line in output.splitlines():
+                if line.startswith("=== ") and line.endswith(" ==="):
+                    if current_block:
+                        blocks.append(current_block)
+                    current_block = {"path": line[4:-4]}
+                elif current_block:
+                    if line.startswith("server:"):
+                        current_block["server"] = line.split(":", 1)[1].strip()
+                    elif line.startswith("session:"):
+                        current_block["session"] = line.split(":", 1)[1].strip()
+                    elif line.startswith("cmd:"):
+                        current_block["cmd"] = line.split(":", 1)[1].strip()
+                    elif line.startswith("started:"):
+                        current_block["started"] = line.split(":", 1)[1].strip()
+                    elif line.startswith("log:"):
+                        current_block["log"] = line.split(":", 1)[1].strip()
+            if current_block:
+                blocks.append(current_block)
+
+            running = []
+            other_server = []
+            stale = []
+
+            for block in blocks:
+                lock_server = block.get("server", "")
+                session = block.get("session", "")
+
+                if lock_server and lock_server != current_server:
+                    other_server.append(block)
+                elif session in active_sessions:
+                    running.append(block)
+                else:
+                    stale.append(block)
+
+            # Display running commands
+            if running:
                 print(info("Running commands:\n"))
-                print(output)
+                for block in running:
+                    print(f"  Session:  {block.get('session', 'unknown')}")
+                    print(f"  Command:  {block.get('cmd', 'unknown')}")
+                    print(f"  Started:  {block.get('started', 'unknown')}")
+                    print(f"  Server:   {block.get('server', 'unknown')}")
+                    print(f"  Log:      {block.get('log', 'unknown')}")
+                    print()
+
+            # Display commands on other servers
+            if other_server:
+                print(info("On another server:\n"))
+                for block in other_server:
+                    server = block.get("server", "unknown")
+                    print(
+                        f"  Session:  {block.get('session', 'unknown')} "
+                        f"(on {server})"
+                    )
+                    print(f"  Command:  {block.get('cmd', 'unknown')}")
+                    print(f"  Started:  {block.get('started', 'unknown')}")
+                    print(f"  Log:      {block.get('log', 'unknown')}")
+                    print()
+
+            # Auto-remove stale lock files
+            if stale:
+                print(warning("Stale lock files (auto-removing):\n"))
+                for block in stale:
+                    lock_path = block.get("path", "")
+                    print(
+                        f"  Session:  {block.get('session', 'unknown')} "
+                        f"(stale - tmux session not found)"
+                    )
+                    print(f"  Command:  {block.get('cmd', 'unknown')}")
+                    print(f"  Started:  {block.get('started', 'unknown')}")
+                    if lock_path:
+                        self._exec(client, f'rm -f "{lock_path}"')
+                        print(f"  Removed:  {lock_path}")
+                    print()
+
+            if not running and not other_server and not stale:
+                print(info("No running commands found."))
 
             self._update_timestamp()
             client.close()
@@ -551,14 +671,14 @@ class TmuxSSHClient:
             # Verify tmux session actually exists on this server
             # (lock file may be visible via shared NFS but session is elsewhere)
             check_session_cmd = f'tmux has-session -t "{session_name}" 2>/dev/null && echo exists || echo missing'
-            _stdin, stdout, _stderr = client.exec_command(check_session_cmd)
+            _stdin, stdout, _stderr = self._exec(client, check_session_cmd)
             session_status = stdout.read().decode().strip()
 
             if session_status != "exists":
                 # Get lock file info to find actual server
                 lock_file = self.get_lock_file(session_name, self.config.log_dir)
                 get_lock_cmd = f'sh -c \'grep "^server:" "{lock_file}" 2>/dev/null\''
-                _stdin, stdout, _stderr = client.exec_command(get_lock_cmd)
+                _stdin, stdout, _stderr = self._exec(client, get_lock_cmd)
                 server_line = stdout.read().decode().strip()
                 lock_server = (
                     server_line.split(":", 1)[1].strip() if server_line else None
@@ -585,7 +705,7 @@ class TmuxSSHClient:
                         )
                     )
                     print(info(f"Removing stale lock file: {lock_file}"))
-                    client.exec_command(f'rm -f "{lock_file}"')
+                    self._exec(client, f'rm -f "{lock_file}"')
                 else:
                     print(
                         warning(
@@ -617,7 +737,7 @@ class TmuxSSHClient:
             get_log_cmd = (
                 f'sh -c \'if [ -f "{lock_file}" ]; then cat "{lock_file}"; fi\''
             )
-            _stdin, stdout, _stderr = client.exec_command(get_log_cmd)
+            _stdin, stdout, _stderr = self._exec(client, get_log_cmd)
             lock_info = stdout.read().decode().strip()
             print(info(f"Lock file info:\n{lock_info}\n"))
 
@@ -627,7 +747,7 @@ class TmuxSSHClient:
             print(f"{CYAN}[*] Streaming output:{RESET}\n")
 
             tail_cmd = f'tail -n +1 -f "{log_symlink}"'
-            _stdin, stdout, _stderr = client.exec_command(tail_cmd)
+            _stdin, stdout, _stderr = self._exec(client, tail_cmd)
 
             channel = stdout.channel
             channel.setblocking(0)
@@ -752,7 +872,7 @@ class TmuxSSHClient:
             get_lock_cmd = (
                 f'sh -c \'if [ -f "{lock_file}" ]; then cat "{lock_file}"; fi\''
             )
-            _stdin, stdout, _stderr = client.exec_command(get_lock_cmd)
+            _stdin, stdout, _stderr = self._exec(client, get_lock_cmd)
             lock_info = stdout.read().decode().strip()
 
             # Parse lock file info
@@ -783,7 +903,7 @@ class TmuxSSHClient:
             # Verify tmux session actually exists on this server
             # (lock file may be visible via shared NFS but session is elsewhere)
             check_session_cmd = f'tmux has-session -t "{session_name}" 2>/dev/null && echo exists || echo missing'
-            _stdin, stdout, _stderr = client.exec_command(check_session_cmd)
+            _stdin, stdout, _stderr = self._exec(client, check_session_cmd)
             session_status = stdout.read().decode().strip()
 
             if session_status != "exists":
@@ -808,7 +928,7 @@ class TmuxSSHClient:
                         )
                     )
                     print(info(f"Removing stale lock file: {lock_file}"))
-                    client.exec_command(f'rm -f "{lock_file}"')
+                    self._exec(client, f'rm -f "{lock_file}"')
                 else:
                     print(
                         warning(
@@ -846,14 +966,14 @@ class TmuxSSHClient:
 
             # Send Ctrl+C to the tmux session
             kill_cmd = f'tmux send-keys -t "{session_name}" C-c'
-            client.exec_command(kill_cmd)
+            self._exec(client, kill_cmd)
 
             # Wait a moment for the signal to be processed
             time.sleep(0.5)
 
             # Remove the lock file
             rm_lock_cmd = f'rm -f "{lock_file}"'
-            client.exec_command(rm_lock_cmd)
+            self._exec(client, rm_lock_cmd)
 
             print(success(f"Killed command in session '{session_name}'."))
 
@@ -991,22 +1111,17 @@ class TmuxSSHClient:
                     f'echo "log: {log_file}" >> "{lock_file}"; '
                     f'if tmux has-session -t "{session_name}" 2>/dev/null; then '
                     f"  {force_cleanup}"
-                    f'  tmux send-keys -t "{session_name}" '
-                    f'"/bin/bash -l -c \\"echo {start_marker} >> {log_file}; '
-                    f"( {safe_cmd} ) 2>&1 | tee -a {log_file}; "
-                    f"echo {end_marker} >> {log_file}; "
-                    f'rm -f {lock_file}\\"" ENTER; '
-                    f"else "
-                    f'  tmux new-session -d -s "{session_name}" '
+                    f'  tmux kill-session -t "{session_name}"; '
+                    f"fi; "
+                    f'tmux new-session -d -s "{session_name}" '
                     f'"/bin/bash -l -c \\"echo {start_marker} >> {log_file}; '
                     f"( {safe_cmd} ) 2>&1 | tee -a {log_file}; "
                     f"echo {end_marker} >> {log_file}; "
                     f'rm -f {lock_file}; exec /bin/bash\\""; '
-                    f"fi; "
                     f'echo "{session_name}"\''
                 )
 
-            _stdin, stdout, _stderr = client.exec_command(dispatch_cmd)
+            _stdin, stdout, _stderr = self._exec(client, dispatch_cmd)
             # Read stdout to ensure command completes, but use session_name
             # which we already know (more reliable than parsing command output)
             stdout.read()
@@ -1028,7 +1143,7 @@ class TmuxSSHClient:
 
             # Stream output using tail -f on the symlink
             tail_cmd = f'tail -n +1 -f "{log_symlink}"'
-            _stdin, stdout, _stderr = client.exec_command(tail_cmd)
+            _stdin, stdout, _stderr = self._exec(client, tail_cmd)
 
             channel = stdout.channel
             channel.setblocking(0)
